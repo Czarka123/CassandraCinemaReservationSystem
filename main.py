@@ -4,6 +4,7 @@ from cassandra.policies import DCAwareRoundRobinPolicy
 # Table Creation
 #CREATE TABLE Reservation(reservation_id int PRIMARY KEY, seans_id int, room int, seat_row varchar, seat_number int, occupied boolean);
 #Create Table Seans(seans_id int Primary Key, film_name text, date text, room int, all_place_occupied boolean);
+#alter table seans add seats_reserved int; #dodana kolumna
 # Create Table Rooms(room int Primary Key, capacity int); #ulatwienie dziala tylko kidy sale maja ta sama ilosc miejsc w kazdym rzedzie
 # room 2 razy nie jest potrzebne ale wydaje mi sie e dla wygody moze zostac
 
@@ -14,9 +15,13 @@ from cassandra.policies import DCAwareRoundRobinPolicy
 
 
 def PrintSeanses():
-    seanses = session.execute('SELECT seans_id, film_name, date,room  FROM Seans')
+    seanses = session.execute('SELECT *  FROM Seans')
+
+    #places = session.execute("select * from Rooms")
     for s in seanses:
-        print ("Film: "+s.film_name +"  Date: " +s.date+"  Room: " +str(s.room))
+        reservations = session.execute(
+            "select count(*) from reservation where seans_id=%s and occupied=True allow filtering", [s.seans_id]) #not most optimal if there are a lot of senses, but good for testing
+        print ("ID: "+str(s.seans_id)+" Film: "+s.film_name +"  Date: " +s.date+"  Room: " +str(s.room) +" reservations: " +str(reservations[0].count))
 
 def GetLastReservationID():
     latestentry=session.execute('SELECT Max(reservation_id)  FROM Reservation ')
@@ -27,7 +32,7 @@ def GetLastReservationID():
 def GetLastSeansID():
     latestentry=session.execute('SELECT Max(seans_id)  FROM Seans ')
 
-    print(" last "+str(latestentry[0].system_max_seans_id)) #not most elegant...mona sprbowac loswac id zamaiast dawac kolejne
+    #print(" last "+str(latestentry[0].system_max_seans_id)) #not most elegant...mona sprbowac loswac id zamaiast dawac kolejne
     return latestentry[0].system_max_seans_id
 
 
@@ -39,12 +44,15 @@ def RegisterSeans(filmname, newdate, roomnumber):
     values (%(seans_id)s,%(film_name)s,%(date)s,%(room)s,%(all_place_occupied)s)""",
                     {'seans_id': seansid, 'film_name': filmname, 'date': newdate, 'room': roomnumber,
                      'all_place_occupied': False})
+    print("you've added seans")
 
-def PrintSeansSeatsWithReservations(selected_seans, selected_room):
-    rooms = session.execute("Select * from Rooms where room=%s ", [selected_room])
+def PrintSeansSeatsWithReservations(selected_seans):
+
 
     reservations = session.execute("Select * from reservation where seans_id =%s and occupied=True allow filtering", [selected_seans])
+    rooms = session.execute("Select * from Rooms where room=%s ", [reservations[0].room])
 
+    print(" Room: "+str( [reservations[0].room]))
     reserved_places = []
     for r in reservations:
         reserved_places.append((ord(r.seat_row) - 65, r.seat_number,))
@@ -68,7 +76,7 @@ def PrintSeansSeatsWithReservations(selected_seans, selected_room):
 
 
 def Make_Reservation(selected_seans,row,seat):
-    wanted_seat=session.execute("select * from reservation where seat_number=%(seat)s and seat_row=%(row)s allow filtering",{'seat' : seat,'row' : row})
+    wanted_seat=session.execute("select * from reservation where seans_id=%(seans_id)s and seat_number=%(seat)s and seat_row=%(row)s allow filtering",{'seans_id' : selected_seans, 'seat' : seat,'row' : row})
     #print(wanted_seat)
 
     if wanted_seat==[]: #add checking if seat exists ?
@@ -91,27 +99,59 @@ def Make_Reservation(selected_seans,row,seat):
         print("sorry place is occupied")
 
 
+def DisplayOptions () :
+    print("0 - help")
+    print("-1 - exit")
+    print("1 - see all seanses")
+    print("2 - see all seats for selected seans")
+    print("3 - add new seans")
+    print("4 - make reservation")
+    print("5 - cancel reservation")
 
 
 cluster = Cluster(
     ['10.10.0.1', '10.10.0.2'])
 
+
+print("connecting to database")
 session = cluster.connect('project') #make sure it's connected
 
 print("connected")
 
-PrintSeanses()
+print("Welcome to Cinema Reservation System")
+print("What do you want do do (press 0 to see options) :")
 
+choice=0
 
+while (choice!=-1) :
+    choice=int(input("awaiting key:  "))
 
-
-PrintSeansSeatsWithReservations(1,1)
-
-
-
-
-#Make_Reservation(1,'A',3)
-
-#PrintSeansSeatsWithReservations(1,1)
-
-
+    if(choice==0):
+        DisplayOptions();
+    elif(choice==1):
+        PrintSeanses()
+    elif(choice==2):
+        seans=int(input("type seans_id:  "))
+        PrintSeansSeatsWithReservations(seans)
+    elif (choice == 3):
+        film=str(input("type film name:  "))
+        date=str(input("type date:  "))
+        room=int(input("type room number:  "))
+        RegisterSeans(film,date,room)
+    elif (choice == 4):
+        reservation_choice = int(input("type 1 if you are making single reservation, 2 all seats  "))
+        if (reservation_choice == 1):
+            seans = int(input("type  seans id:  "))
+            row = str(input("type selected row:  "))
+            seat = int(input("type selected seat:  "))
+            Make_Reservation(seans,row,seat)
+        elif (reservation_choice == 2):
+            seans = int(input("type  seans id:  "))
+            se = session.execute(
+                "Select * from seans where seans_id =%s ", [seans])
+            room = session.execute("Select * from Rooms where room=%s ", [se[0].room])
+            seats_per_row =room[0].capacity/ room[0].numberofrows
+            seats_per_row=seats_per_row+1
+            for row in range(0,room[0].numberofrows):
+                for seat in range(1, int(seats_per_row)):
+                    Make_Reservation(seans, chr(65 + row), seat)
