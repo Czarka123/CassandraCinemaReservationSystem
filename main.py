@@ -4,7 +4,7 @@ from cassandra.policies import DCAwareRoundRobinPolicy
 # Table Creation
 #CREATE TABLE Reservation(reservation_id int PRIMARY KEY, seans_id int, room int, seat_row varchar, seat_number int, occupied boolean);
 #Create Table Seans(seans_id int Primary Key, film_name text, date text, room int, all_place_occupied boolean);
-#alter table seans add seats_reserved int; #dodana kolumna
+
 # Create Table Rooms(room int Primary Key, capacity int); #ulatwienie dziala tylko kidy sale maja ta sama ilosc miejsc w kazdym rzedzie
 # room 2 razy nie jest potrzebne ale wydaje mi sie e dla wygody moze zostac
 
@@ -50,6 +50,20 @@ def PrintSeansSeatsWithReservations(selected_seans):
 
 
     reservations = session.execute("Select * from reservation where seans_id =%s and occupied=True allow filtering", [selected_seans])
+    if(reservations==[]): #printing empty room
+        reservations=session.execute("Select * from seans where seans_id =%s", [selected_seans])
+        rooms = session.execute("Select * from Rooms where room=%s ", [reservations[0].room])
+        print(" Room: " + str([reservations[0].room]))
+        number_of_seats_in_row = rooms[0].capacity / rooms[0].numberofrows
+        number_of_seats_in_row = number_of_seats_in_row + 1
+        for row in range(0, rooms[0].numberofrows):
+            for seat in range(1, int(number_of_seats_in_row)):
+                print(" " + chr(65 + row) + str(seat) + " ", end="", flush=True)
+
+            print("\n")
+        return;
+
+
     rooms = session.execute("Select * from Rooms where room=%s ", [reservations[0].room])
 
     print(" Room: "+str( [reservations[0].room]))
@@ -97,6 +111,8 @@ def Make_Reservation(selected_seans,row,seat):
 
     else:
         print("sorry place is occupied")
+def Cancel_Reservation(reservation_id):
+    session.execute("update reservation set occupied=False where reservation_id=%s;",[reservation_id])
 
 
 def DisplayOptions () :
@@ -155,3 +171,6 @@ while (choice!=-1) :
             for row in range(0,room[0].numberofrows):
                 for seat in range(1, int(seats_per_row)):
                     Make_Reservation(seans, chr(65 + row), seat)
+    elif (choice==5):
+        can_id =int(input("type reservation id that you want to cancel:  "))
+        Cancel_Reservation(can_id)
