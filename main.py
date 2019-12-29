@@ -68,7 +68,7 @@ def PrintSeansSeatsWithReservations(selected_seans, selected_room):
 
 
 def Make_Reservation(selected_seans,row,seat):
-    wanted_seat=session.execute("select * from reservation where seat_number=%(seat)s and seat_row=%(row)s allow filtering",{'seat' : seat,'row' : row})
+    wanted_seat=session.execute("select * from reservation where seans_id=%(seans_id)s and seat_number=%(seat)s and seat_row=%(row)s allow filtering",{'seans_id' : selected_seans, 'seat' : seat,'row' : row})
     #print(wanted_seat)
 
     if wanted_seat==[]: #add checking if seat exists ?
@@ -107,8 +107,13 @@ PrintSeanses()
 
 PrintSeansSeatsWithReservations(1,1)
 
+for x in range(1,5):
+    Make_Reservation(3, 'A', x)
+    Make_Reservation(3, 'B', x)
+    Make_Reservation(3, 'C', x)
+    Make_Reservation(3, 'D', x)
 
-
+PrintSeansSeatsWithReservations(3,1)
 
 #Make_Reservation(1,'A',3)
 
