@@ -24,6 +24,21 @@ def GetLastReservationID():
    # print(" last "+str(latestentry[0])) #not most elegant...mona sprbowac loswac id zamaiast dawac kolejne
     return latestentry[0].system_max_reservation_id
 
+def GetLastSeansID():
+    latestentry=session.execute('SELECT Max(seans_id)  FROM Seans ')
+
+    print(" last "+str(latestentry[0].system_max_seans_id)) #not most elegant...mona sprbowac loswac id zamaiast dawac kolejne
+    return latestentry[0].system_max_seans_id
+
+
+def RegisterSeans(filmname, newdate, roomnumber):
+    seansid = GetLastSeansID()
+    seansid = seansid + 1
+
+    session.execute("""Insert into Seans(seans_id, film_name, date, room, all_place_occupied) 
+    values (%(seans_id)s,%(film_name)s,%(date)s,%(room)s,%(all_place_occupied)s)""",
+                    {'seans_id': seansid, 'film_name': filmname, 'date': newdate, 'room': roomnumber,
+                     'all_place_occupied': False})
 
 def PrintSeansSeatsWithReservations(selected_seans, selected_room):
     rooms = session.execute("Select * from Rooms where room=%s ", [selected_room])
@@ -56,7 +71,7 @@ def Make_Reservation(selected_seans,row,seat):
     wanted_seat=session.execute("select * from reservation where seat_number=%(seat)s and seat_row=%(row)s allow filtering",{'seat' : seat,'row' : row})
     #print(wanted_seat)
 
-    if wanted_seat==[]:
+    if wanted_seat==[]: #add checking if seat exists ?
         new_id = int(GetLastReservationID()) + 1
         seanses = session.execute('SELECT * FROM Seans where seans_id=%s', [selected_seans])
         print("making...reservation " + str(new_id))
@@ -78,7 +93,6 @@ def Make_Reservation(selected_seans,row,seat):
 
 
 
-
 cluster = Cluster(
     ['10.10.0.1', '10.10.0.2'])
 
@@ -88,12 +102,16 @@ print("connected")
 
 PrintSeanses()
 
-GetLastReservationID()
+
+
 
 PrintSeansSeatsWithReservations(1,1)
 
-Make_Reservation(1,'A',3)
 
-PrintSeansSeatsWithReservations(1,1)
+
+
+#Make_Reservation(1,'A',3)
+
+#PrintSeansSeatsWithReservations(1,1)
 
 
