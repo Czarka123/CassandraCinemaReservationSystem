@@ -1,16 +1,20 @@
+import time
+
 from cassandra.cluster import Cluster
 from cassandra.policies import DCAwareRoundRobinPolicy
 
+import netifaces as ni
+
 # Table Creation
-#CREATE TABLE Reservation(reservation_id int PRIMARY KEY, seans_id int, room int, seat_row varchar, seat_number int, occupied boolean);
+#CREATE TABLE Reservation(reservation_id int PRIMARY KEY, node varchar, seans_id int, room int, seat_row varchar, seat_number int);
 #Create Table Seans(seans_id int Primary Key, film_name text, date text, room int, all_place_occupied boolean);
 
-# Create Table Rooms(room int Primary Key, capacity int); #ulatwienie dziala tylko kidy sale maja ta sama ilosc miejsc w kazdym rzedzie
+# Create Table Rooms(room int Primary Key, capacity int, numberOfRows int); #ulatwienie dziala tylko kidy sale maja ta sama ilosc miejsc w kazdym rzedzie
 # room 2 razy nie jest potrzebne ale wydaje mi sie e dla wygody moze zostac
 
 #Inserts
 #Insert into Rooms(room, capacity, numberOfRows) values (1, 20, 4);
-#Insert into Reservation(reservation_id,seans_id, room,seat_row,seat_number,occupied) values (1,1,1,'C',3,true);
+#Insert into Reservation(reservation_id,node,seans_id, room,seat_row,seat_number) values (1,'192.168.0.15',1,1,'C',3);
 #Insert into Seans(seans_id, film_name, date, room, all_place_occupied) values (1,'joker','20:00 : 3.12.2019',1,false);
 
 
@@ -20,12 +24,12 @@ def PrintSeanses():
     #places = session.execute("select * from Rooms")
     for s in seanses:
         reservations = session.execute(
-            "select count(*) from reservation where seans_id=%s and occupied=True allow filtering", [s.seans_id]) #not most optimal if there are a lot of senses, but good for testing
+            "select count(*) from reservation where seans_id=%s allow filtering", [s.seans_id]) #not most optimal if there are a lot of senses, but good for testing
         print ("ID: "+str(s.seans_id)+" Film: "+s.film_name +"  Date: " +s.date+"  Room: " +str(s.room) +" reservations: " +str(reservations[0].count))
 
 def GetLastReservationID():
     latestentry=session.execute('SELECT Max(reservation_id)  FROM Reservation ')
-
+    if not latestentry : return 0
    # print(" last "+str(latestentry[0])) #not most elegant...mona sprbowac loswac id zamaiast dawac kolejne
     return latestentry[0].system_max_reservation_id
 
@@ -49,19 +53,21 @@ def RegisterSeans(filmname, newdate, roomnumber):
 def PrintSeansSeatsWithReservations(selected_seans):
 
 
-    reservations = session.execute("Select * from reservation where seans_id =%s and occupied=True allow filtering", [selected_seans])
-    if(reservations==[]): #printing empty room
-        reservations=session.execute("Select * from seans where seans_id =%s", [selected_seans])
-        rooms = session.execute("Select * from Rooms where room=%s ", [reservations[0].room])
-        print(" Room: " + str([reservations[0].room]))
-        number_of_seats_in_row = rooms[0].capacity / rooms[0].numberofrows
-        number_of_seats_in_row = number_of_seats_in_row + 1
-        for row in range(0, rooms[0].numberofrows):
-            for seat in range(1, int(number_of_seats_in_row)):
-                print(" " + chr(65 + row) + str(seat) + " ", end="", flush=True)
+    reservations = session.execute("Select * from reservation where seans_id =%s allow filtering", [selected_seans])
 
-            print("\n")
-        return;
+    if(reservations==[]): #printing empty room
+        return
+        #reservations=session.execute("Select * from seans where seans_id =%s", [selected_seans])
+        #rooms = session.execute("Select * from Rooms where room=%s ", [reservations[0].room])
+        #print(" Room: " + str([reservations[0].room]))
+        #number_of_seats_in_row = rooms[0].capacity / rooms[0].numberofrows
+        #number_of_seats_in_row = number_of_seats_in_row + 1
+        #for row in range(0, rooms[0].numberofrows):
+        #    for seat in range(1, int(number_of_seats_in_row)):
+        #        print(" " + chr(65 + row) + str(seat) + " ", end="", flush=True)
+
+        #    print("\n")
+        #return;
 
 
     rooms = session.execute("Select * from Rooms where room=%s ", [reservations[0].room])
@@ -90,30 +96,79 @@ def PrintSeansSeatsWithReservations(selected_seans):
 
 
 def Make_Reservation(selected_seans,row,seat):
+    room = session.execute("Select * from Seans where seans_id=%(seans_id)s", {'seans_id' : selected_seans})
+    if not room:return #seans
+    rooms = session.execute("Select * from Rooms where room=%s", [room[0].room])
+    number_of_seats_in_row = rooms[0].capacity / rooms[0].numberofrows
+
+    if seat>number_of_seats_in_row: return
+
+    rowexist=0
+
+    for rowcount in range(0, rooms[0].numberofrows):
+        if row==chr(65 + rowcount): rowexist=1
+    if rowexist==0: return
+
     wanted_seat=session.execute("select * from reservation where seans_id=%(seans_id)s and seat_number=%(seat)s and seat_row=%(row)s allow filtering",{'seans_id' : selected_seans, 'seat' : seat,'row' : row})
-    #print(wanted_seat)
+
 
     if wanted_seat==[]: #add checking if seat exists ?
-        new_id = int(GetLastReservationID()) + 1
+        new_id = (GetLastReservationID()) + 1
+        ni.ifaddresses('enp0s9')
+        nodeid=ni.ifaddresses('enp0s9')[ni.AF_INET][0]['addr']
         seanses = session.execute('SELECT * FROM Seans where seans_id=%s', [selected_seans])
         print("making...reservation " + str(new_id))
-        session.execute("""Insert into Reservation(reservation_id, seans_id,room ,seat_row,seat_number,occupied)
-            values (%(reservation_id)s,%(seans_id)s,%(room)s,%(seat_row)s,%(seat_number)s,%(occupied)s)""",
-                        {'reservation_id': new_id, 'seans_id': selected_seans, 'room': seanses[0].room, 'seat_row': row,
-                         'seat_number': seat, 'occupied': True})
-    elif wanted_seat[0].occupied == False: #anulowana rezerwacja
-        print("making...reservation " )
-        wanted_seat = session.execute(
-            "select * from reservation where seat_number=%(seat)s and seat_row=%(row)s and seans_id=%(seans_id)s allow filtering",
-            {'seat': seat, 'row': row, 'seans_id' : selected_seans})
+        session.execute("""Insert into Reservation(reservation_id,node, seans_id,room ,seat_row,seat_number)
+            values (%(reservation_id)s,%(node)s,%(seans_id)s,%(room)s,%(seat_row)s,%(seat_number)s)""",
+                        {'reservation_id': new_id, 'node' : nodeid,'seans_id': selected_seans, 'room': seanses[0].room, 'seat_row': row,
+                         'seat_number': seat})
+        time.sleep(0.1)
 
-        session.execute("Update reservation set occupied=True where reservation_id=%s",[wanted_seat[0].reservation_id])
+        check_reservation = session.execute(
+            "select * from reservation where reservation_id=%(reservation_id)s allow filtering",
+            {'reservation_id': new_id})
 
-    else:
-        print("sorry place is occupied")
+        if check_reservation[0].node == nodeid: #check if reservation is not doubled
+            check_reservation2 = session.execute(
+                "select * from reservation where seat_row=%(seat_row)s and seat_number=%(seat_number)s and seans_id = %(seans_id)s allow filtering",
+                {'seat_row': row, 'seat_number': seat, 'seans_id': selected_seans})
+
+            it=0
+            for check in check_reservation2:
+                it=it+1
+
+            if it>1:
+                Cancel_Reservation(new_id)
+            else:
+                print("reservation complete")
+
+
+        else :
+            print("seat was already reserved...please select another one")
+    else :
+        print("seat was already reserved...please select another one")
+
+    #elif wanted_seat[0].occupied == False: #anulowana rezerwacja
+     #   print("making...reservation " )
+      #  wanted_seat = session.execute(
+       #     "select * from reservation where seat_number=%(seat)s and seat_row=%(row)s and seans_id=%(seans_id)s allow filtering",
+        #    {'seat': seat, 'row': row, 'seans_id' : selected_seans})
+
+       # session.execute("Update reservation set occupied=True where reservation_id=%s",[wanted_seat[0].reservation_id])
+
+   # else:
+    #    print("sorry place is occupied")
 def Cancel_Reservation(reservation_id):
-    session.execute("update reservation set occupied=False where reservation_id=%s;",[reservation_id])
+    ni.ifaddresses('enp0s9')
+    nodeid=ni.ifaddresses('enp0s9')[ni.AF_INET][0]['addr']
+    wanted_seat=session.execute("select * from reservation where reservation_id=%(reservation_id)s allow filtering",{'reservation_id' : reservation_id})
+    if not wanted_seat: return
+    if wanted_seat[0].node!=str(nodeid):
+        print("can't remove reservation, this node didn't make reservation")
+        return
 
+    session.execute("delete from reservation where reservation_id=%(reservation_id)s",{'reservation_id' : reservation_id})
+    print("reservation %s canceled",[reservation_id])
 
 def DisplayOptions () :
     print("0 - help")
@@ -165,12 +220,16 @@ while (choice!=-1) :
             seans = int(input("type  seans id:  "))
             se = session.execute(
                 "Select * from seans where seans_id =%s ", [seans])
-            room = session.execute("Select * from Rooms where room=%s ", [se[0].room])
-            seats_per_row =room[0].capacity/ room[0].numberofrows
-            seats_per_row=seats_per_row+1
-            for row in range(0,room[0].numberofrows):
-                for seat in range(1, int(seats_per_row)):
-                    Make_Reservation(seans, chr(65 + row), seat)
+            if se!=[]:
+                room = session.execute("Select * from Rooms where room=%s ", [se[0].room])
+
+                seats_per_row =room[0].capacity/ room[0].numberofrows
+                seats_per_row=seats_per_row+1
+                for row in range(0,room[0].numberofrows):
+                    for seat in range(1, int(seats_per_row)):
+                        Make_Reservation(seans, chr(65 + row), seat)
     elif (choice==5):
         can_id =int(input("type reservation id that you want to cancel:  "))
         Cancel_Reservation(can_id)
+    else :
+        continue
