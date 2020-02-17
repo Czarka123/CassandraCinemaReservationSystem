@@ -341,7 +341,7 @@ def DisplayOptions () :
     print("6 - stress test")
 
 cluster = Cluster(['10.10.0.1', '10.10.0.2'])
-interface='enp0s9'
+interface='eth1'
 
 print("connecting to database")
 session = cluster.connect('project') #make sure it's connected
@@ -438,7 +438,7 @@ while (choice!=-1) :
     elif(choice==6):
 
 
-        RegisterSeans('Test', '00:00:0000 :0:0', 2)
+        RegisterSeans('Test', '00:00:0000 :0:0', 1)
         test_seans_id1 = GetLastSeansID()
         thread1 = TestThread(test_seans_id1, '10.10.0.3')
         thread2 = TestThread(test_seans_id1, '10.10.0.4')
@@ -446,7 +446,7 @@ while (choice!=-1) :
         thread1.start()
         thread2.start()
 
-        RegisterSeans('Test2', '00:00:0000 :0:0', 2)
+        RegisterSeans('Test2', '00:00:0000 :0:0', 1)
         test_seans_id2 = GetLastSeansID()
         thread3 = TestThread(test_seans_id2, '10.10.0.5')
         thread4 = TestThread(test_seans_id2, '10.10.0.6')
@@ -456,7 +456,7 @@ while (choice!=-1) :
         thread4.start()
         thread5.start()
 
-        RegisterSeans('Test3', '00:00:0000 :0:0', 2)
+        RegisterSeans('Test3', '00:00:0000 :0:0', 1)
         test_seans_id3 = GetLastSeansID()
         thread6 = TestThread(test_seans_id3, '10.10.0.9')
         thread7 = TestThread(test_seans_id3, '10.10.0.10')
@@ -472,7 +472,7 @@ while (choice!=-1) :
 
         #t.sleep(7)
 
-        RegisterSeans('Test4', '00:00:0000 :0:0', 2)
+        RegisterSeans('Test4', '00:00:0000 :0:0', 1)
         test_seans_id4 = GetLastSeansID()
 
 
@@ -482,9 +482,7 @@ while (choice!=-1) :
 
         thread11.start()
         thread12.start()
-        thread13.start()
-
-
+        thread13.start()       
 
 
     elif (choice == 7):
@@ -493,5 +491,17 @@ while (choice!=-1) :
 
         for sr in seans_rows:
             print(str(sr[0]) +" | "+sr[1]+" : "+str(sr[2]) + " -> "+str(sr[3]))
+    
+    elif (choice ==8):
+        threadarray=[]
+        RegisterSeans('Test5', '00:00:0000 :0:0', 1)
+        test_seans_id5 = GetLastSeansID()
+        for i in range(1,1000):
+            ip="10.10.0.%d" % (i+13)
+       	    thread=TestThread(test_seans_id5,ip)
+            threadarray.append(thread)
+       	for thr in threadarray:
+            thr.start()
+    
     else :
         continue
